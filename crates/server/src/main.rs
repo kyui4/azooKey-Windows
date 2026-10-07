@@ -30,13 +30,21 @@ struct FFICandidate {
 unsafe extern "C" {
     fn Initialize(path: *const c_char, use_zenzai: bool);
     fn SetContext(context: *const c_char);
-    fn AppendText(input: *const c_char, cursorPtr: *mut c_int) -> *mut c_char;
-    fn RemoveText(cursorPtr: *mut c_int) -> *mut c_char;
-    fn MoveCursor(offset: c_int, cursorPtr: *mut c_int) -> *mut c_char;
+    fn AppendText(input: *const c_char, cursorPtr: *mut isize) -> *mut c_char;
+    fn RemoveText(cursorPtr: *mut isize) -> *mut c_char;
+    fn MoveCursor(offset: c_int, cursorPtr: *mut isize) -> *mut c_char;
     fn ShrinkText(offset: c_int) -> *mut c_char;
     fn ClearText();
-    fn GetComposedText(lengthPtr: *mut c_int) -> *mut *mut FFICandidate;
+    fn GetComposedText(lengthPtr: *mut isize) -> *mut *mut FFICandidate;
+    fn FreeString(text: *mut c_char);
+    fn FreeCandidates(candidates: *mut *mut FFICandidate, length: isize);
     fn LoadConfig();
+}
+
+unsafe fn take_string(pointer: *mut c_char) -> String {
+    let result = CStr::from_ptr(pointer).to_string_lossy().into_owned();
+    FreeString(pointer);
+    result
 }
 
 fn initialize(path: &str) {
@@ -49,14 +57,14 @@ fn initialize(path: &str) {
 fn add_text(input: &str) -> RawComposingText {
     unsafe {
         let input = CString::new(input).expect("CString::new failed");
-        let mut cursor: c_int = 0;
+        let mut cursor: isize = 0;
 
         let result = AppendText(input.as_ptr(), &mut cursor);
 
-        let text = CStr::from_ptr(&*result as *const c_char).to_str().unwrap();
+        let text = take_string(result);
 
         RawComposingText {
-            text: text.to_string(),
+            text,
             cursor: cursor as i8,
         }
     }
@@ -66,14 +74,14 @@ fn move_cursor(offset: i8) -> RawComposingText {
     unsafe {
         let offset = c_int::from(offset);
         println!("Offset: {}", offset);
-        let mut cursor: c_int = 0;
+        let mut cursor: isize = 0;
 
         let result = MoveCursor(offset, &mut cursor);
 
-        let text = CStr::from_ptr(&*result as *const c_char).to_str().unwrap();
+        let text = take_string(result);
 
         RawComposingText {
-            text: text.to_string(),
+            text,
             cursor: cursor as i8,
         }
     }
@@ -81,14 +89,14 @@ fn move_cursor(offset: i8) -> RawComposingText {
 
 fn remove_text() -> RawComposingText {
     unsafe {
-        let mut cursor: c_int = 0;
+        let mut cursor: isize = 0;
 
         let result = RemoveText(&mut cursor);
 
-        let text = CStr::from_ptr(&*result as *const c_char).to_str().unwrap();
+        let text = take_string(result);
 
         RawComposingText {
-            text: text.to_string(),
+            text,
             cursor: cursor as i8,
         }
     }
@@ -101,8 +109,10 @@ fn clear_text() {
 }
 
 fn get_composed_text() -> Vec<Suggestion> {
+    let started = std::time::Instant::now();
     unsafe {
-        let mut length: c_int = 0;
+        // Swift Int has pointer width, unlike C int on 64-bit Windows.
+        let mut length: isize = 0;
         let result = GetComposedText(&mut length);
         let mut suggestions = Vec::with_capacity(length as usize);
 
@@ -132,6 +142,10 @@ fn get_composed_text() -> Vec<Suggestion> {
             suggestions.push(suggestion);
         }
 
+        FreeCandidates(result, length);
+        if std::env::var_os("AZOOKEY_TIMING").is_some() {
+            eprintln!("conversion_ms={:.3}", started.elapsed().as_secs_f64() * 1000.0);
+        }
         suggestions
     }
 }
@@ -141,10 +155,10 @@ fn shrink_text(offset: i8) -> RawComposingText {
         let offset = c_int::from(offset);
         let result = ShrinkText(offset);
 
-        let text = CStr::from_ptr(&*result as *const c_char).to_str().unwrap();
+        let text = take_string(result);
 
         RawComposingText {
-            text: text.to_string(),
+            text,
             cursor: 0,
         }
     }
@@ -248,7 +262,9 @@ impl AzookeyService for MyAzookeyService {
     }
 }
 
-#[tokio::main]
+// Swift's converter and composing text are shared mutable state. Keep FFI calls
+// on this thread; none of the service handlers yield while using the converter.
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("AzookeyServer started");
     // get executable directory

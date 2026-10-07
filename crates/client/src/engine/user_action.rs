@@ -1,4 +1,5 @@
 use crate::extension::VKeyExt;
+use super::input_mode::InputMode;
 use anyhow::{Context, Result};
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyboardState, ToUnicode, VK_SHIFT};
 
@@ -15,6 +16,7 @@ pub enum UserAction {
     Function(Function),
     Number(i8),
     ToggleInputMode,
+    SetInputMode(InputMode),
 }
 
 #[derive(Debug)]
@@ -72,6 +74,8 @@ impl TryFrom<usize> for UserAction {
             0x79 => UserAction::Function(Function::Ten), // VK_F10
 
             0xF3 | 0xF4 => UserAction::ToggleInputMode, // Zenkaku/Hankaku
+            0x1D => UserAction::SetInputMode(InputMode::Latin), // VK_NONCONVERT
+            0x1C => UserAction::SetInputMode(InputMode::Kana), // VK_CONVERT
 
             _ => {
                 let key_state = {

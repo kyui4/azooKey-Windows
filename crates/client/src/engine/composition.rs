@@ -18,7 +18,7 @@ use super::{
 use windows::Win32::{
     Foundation::WPARAM,
     UI::{
-        Input::KeyboardAndMouse::VK_CONTROL,
+        Input::KeyboardAndMouse::{VK_CONTROL, VK_MENU, VK_SHIFT},
         TextServices::{ITfComposition, ITfCompositionSink_Impl, ITfContext},
     },
 };
@@ -48,6 +48,39 @@ pub struct Composition {
 
     pub state: CompositionState,
     pub tip_composition: Option<ITfComposition>,
+}
+
+fn input_mode_actions(state: CompositionState, current: &InputMode, target: InputMode) -> (Vec<ClientAction>, CompositionState) {
+    if &target == current { return (vec![], state); }
+    let mut actions = Vec::new();
+    if state != CompositionState::None { actions.push(ClientAction::EndComposition); }
+    actions.push(ClientAction::SetIMEMode(target));
+    (actions, CompositionState::None)
+}
+
+#[cfg(test)]
+mod input_mode_tests {
+    use super::*;
+
+    #[test]
+    fn switching_to_latin_commits_before_changing_mode() {
+        for state in [CompositionState::Composing, CompositionState::Previewing, CompositionState::Selecting] {
+            let (actions, transition) = input_mode_actions(state, &InputMode::Kana, InputMode::Latin);
+            assert_eq!(actions, vec![ClientAction::EndComposition, ClientAction::SetIMEMode(InputMode::Latin)]);
+            assert_eq!(transition, CompositionState::None);
+        }
+    }
+
+    #[test]
+    fn repeated_kana_key_preserves_composition_and_selection() {
+        for state in [CompositionState::None, CompositionState::Composing, CompositionState::Previewing] {
+            let (actions, transition) = input_mode_actions(state.clone(), &InputMode::Kana, InputMode::Kana);
+            assert!(actions.is_empty());
+            assert_eq!(transition, state);
+        }
+        let (actions, _) = input_mode_actions(CompositionState::None, &InputMode::Latin, InputMode::Kana);
+        assert_eq!(actions, vec![ClientAction::SetIMEMode(InputMode::Kana)]);
+    }
 }
 
 impl ITfCompositionSink_Impl for TextServiceFactory_Impl {
@@ -92,6 +125,14 @@ impl TextServiceFactory {
         };
 
         let action = UserAction::try_from(wparam.0)?;
+
+        if let UserAction::SetInputMode(target) = action {
+            // Leave modified keys available to application shortcuts.
+            if VK_MENU.is_pressed() || VK_SHIFT.is_pressed() {
+                return Ok(None);
+            }
+            return Ok(Some(input_mode_actions(composition.state, &mode, target)));
+        }
 
         let (transition, actions) = match composition.state {
             CompositionState::None => match action {
@@ -313,7 +354,9 @@ impl TextServiceFactory {
         };
 
         if let Some((actions, transition)) = self.process_key(context, wparam)? {
-            self.handle_action(&actions, transition)?;
+            if !actions.is_empty() {
+                self.handle_action(&actions, transition)?;
+            }
         } else {
             return Ok(false);
         }

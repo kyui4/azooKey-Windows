@@ -1,4 +1,4 @@
-import { Bot, Settings, Megaphone } from "lucide-react"
+import { Bot, Settings, Megaphone, BookOpen } from "lucide-react"
 
 import {
     Sidebar,
@@ -14,6 +14,7 @@ import {
 
 // Menu items.
 const contents = [
+    { title: "ユーザー辞書", url: "/dictionary", icon: BookOpen },
     {
         title: "全般",
         url: "/",

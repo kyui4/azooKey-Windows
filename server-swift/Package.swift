@@ -17,12 +17,12 @@ let package = Package(
     dependencies: [
         // Dependencies declare other packages that this package depends on.
         // .package(url: /* package url */, from: "1.0.0"),
-        .package(url: "https://github.com/azookey/AzooKeyKanaKanjiConverter", branch: "7d5dd99")
+        .package(url: "https://github.com/azookey/AzooKeyKanaKanjiConverter", revision: "7d5dd99fd7f4d1251ff94ae6c75642e4b36f327b")
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
-        .target(name: "ffi"),
+        .target(name: "ffi", linkerSettings: [.linkedLibrary("kernel32", .when(platforms: [.windows]))]),
         .target(
             name: "azookey-server",
             dependencies: [

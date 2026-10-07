@@ -4,6 +4,11 @@ import { RefreshCcw, ExternalLink } from "lucide-react";
 export const General = () => {
     return (
         <div className="space-y-8">
+            <section className="space-y-2 rounded-md border p-4">
+                <h1 className="text-sm font-bold">日本語・英数の切り替え</h1>
+                <p className="text-sm">無変換キーで英数、変換キーで日本語に切り替えます。</p>
+                <p className="text-xs text-muted-foreground">入力途中で英数へ切り替えると、現在の変換候補を確定します。同じモードのキーを押しても切り替わりません。</p>
+            </section>
             <section className="space-y-2">
                 <h1 className="text-sm font-bold text-foreground">バージョンと更新プログラム</h1>
                 <div className="flex items-center space-x-4 rounded-md border p-4">

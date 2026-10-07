@@ -20,9 +20,12 @@ fn main() -> anyhow::Result<()> {
     let mut new_path = env::var("PATH").unwrap_or_else(|_| String::new());
     new_path = format!("{};{}", backend_path_str, new_path);
     env::set_var("PATH", &new_path);
+    env::set_var("AZOOKEY_BACKEND_PATH", &backend_path);
+    let gpu_layers = if config.zenzai.backend == "cpu" { 0 } else { config.zenzai.gpu_layers };
+    env::set_var("AZOOKEY_GPU_LAYERS", gpu_layers.to_string());
 
-    let server_process = start_process("azookey-server.exe", "[server]");
-    let ui_process = start_process("ui.exe", "[ui]");
+    let server_process = start_process(exe_path.join("azookey-server.exe"), "[server]");
+    let ui_process = start_process(exe_path.join("ui.exe"), "[ui]");
 
     if let (Some(mut server), Some(mut ui)) = (server_process, ui_process) {
         let server_handle = thread::spawn(move || server.wait());
@@ -35,12 +38,12 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn start_process(exe: &str, prefix: &str) -> Option<Child> {
-    let mut child = Command::new(exe)
+fn start_process(exe: std::path::PathBuf, prefix: &str) -> Option<Child> {
+    let mut child = Command::new(&exe)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect(&format!("Failed to start {}", exe));
+        .expect(&format!("Failed to start {}", exe.display()));
 
     let stdout = child.stdout.take().expect("Failed to capture stdout");
     let stdout_reader = BufReader::new(stdout);

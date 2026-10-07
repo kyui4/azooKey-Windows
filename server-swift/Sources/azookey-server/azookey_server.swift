@@ -5,6 +5,25 @@ import ffi
 @MainActor let converter = KanaKanjiConverter()
 @MainActor var composingText = ComposingText()
 
+struct UserDictionaryEntry: Codable, Equatable {
+    let reading: String
+    let word: String
+
+    var dicdata: DicdataElement {
+        // The converter indexes dictionary entries by full-width katakana.
+        let ruby = String(String.UnicodeScalarView(reading.unicodeScalars.map { scalar in
+            if (0x3041...0x3096).contains(scalar.value) {
+                return UnicodeScalar(scalar.value + 0x60)!
+            }
+            return scalar
+        }))
+        return DicdataElement(word: word, ruby: ruby, cid: CIDData.一般名詞.cid,
+                              mid: MIDData.一般.mid, value: -5)
+    }
+}
+
+@MainActor var userDictionary: [UserDictionaryEntry] = []
+
 @MainActor var execURL = URL(filePath: "")
 @MainActor var config: [String : Any] = [
     "enable": false,
@@ -81,6 +100,14 @@ func constructCandidateString(candidate: Candidate, hiragana: String) -> String 
             let data = try Data(contentsOf: settingsPath)
             if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                let zenzaiDict = json["zenzai"] as? [String: Any] {
+
+                let entriesData = try JSONSerialization.data(withJSONObject: json["user_dictionary"] ?? [])
+                let entries = try JSONDecoder().decode([UserDictionaryEntry].self, from: entriesData)
+                if entries != userDictionary {
+                    converter.stopComposition()
+                    converter.sendToDicdataStore(.importDynamicUserDict(entries.map(\.dicdata)))
+                    userDictionary = entries
+                }
                 
                 if let enableValue = zenzaiDict["enable"] as? Bool {
                     config["enable"] = enableValue
@@ -104,11 +131,16 @@ func constructCandidateString(candidate: Candidate, hiragana: String) -> String 
     let path = String(cString: path)
     execURL = URL(filePath: path)
 
+    if azookey_load_backends() == 0 {
+        print("Zenzai: backend discovery unavailable")
+    }
+
     load_config()
 
     composingText.insertAtCursorPosition("a", inputStyle: .roman2kana)
     converter.requestCandidates(composingText, options: getOptions())
     composingText = ComposingText()
+    converter.stopComposition()
 }
 
 @_silgen_name("AppendText")
@@ -149,6 +181,7 @@ func constructCandidateString(candidate: Candidate, hiragana: String) -> String 
 @_silgen_name("ClearText")
 @MainActor public func clear_text() {
     composingText = ComposingText()
+    converter.stopComposition()
 }
 
 func to_list_pointer(_ list: [FFICandidate]) -> UnsafeMutablePointer<UnsafeMutablePointer<FFICandidate>?> {
@@ -158,6 +191,24 @@ func to_list_pointer(_ list: [FFICandidate]) -> UnsafeMutablePointer<UnsafeMutab
         pointer[i]?.pointee = item
     }
     return pointer
+}
+
+@_silgen_name("FreeString")
+public func free_string(_ text: UnsafeMutablePointer<CChar>) {
+    free(text)
+}
+
+@_silgen_name("FreeCandidates")
+public func free_candidates(_ candidates: UnsafeMutablePointer<UnsafeMutablePointer<FFICandidate>?>, _ length: Int) {
+    for index in 0..<length {
+        if let candidate = candidates[index] {
+            free(candidate.pointee.text)
+            free(candidate.pointee.subtext)
+            free(candidate.pointee.hiragana)
+            candidate.deallocate()
+        }
+    }
+    candidates.deallocate()
 }
 
 @_silgen_name("GetComposedText")

@@ -1,5 +1,8 @@
 name: Rust
 
+permissions:
+  contents: read
+
 on:
   push:
   pull_request:
@@ -7,7 +10,8 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
+    timeout-minutes: 90
 
     steps:
     - uses: actions/checkout@v4
@@ -17,11 +21,25 @@ jobs:
     - name: Cache Rust
       uses: Swatinem/rust-cache@v2
 
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: npm
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Locate Inno Setup
+      shell: pwsh
+      run: |
+        $inno = 'C:\Program Files (x86)\Inno Setup 6'
+        if (!(Test-Path "$inno\ISCC.exe")) { throw "Inno Setup compiler is missing" }
+        Add-Content $env:GITHUB_PATH $inno
+
     - name: Install Swift
       uses: compnerd/gha-setup-swift@main
       with:
-        branch: swift-6.0.2-release
-        tag: 6.0.2-RELEASE
+        swift-version: swift-6.0.2-release
+        swift-build: 6.0.2-RELEASE
 
     - name: Fix swift sdk
       shell: pwsh
@@ -36,6 +54,9 @@ jobs:
 
     - name: Install cargo-make
       run: cargo install --force cargo-make
+
+    - name: Install x86 target
+      run: rustup target add i686-pc-windows-msvc
 
     - name: Download prebuilt llama
       run: |
@@ -73,10 +94,21 @@ jobs:
     - name: Install node dependencies
       run: |
         cd frontend
-        npm install
+        npm ci
 
     - name: Build
       run: cargo make build --release
+
+    - name: Test Rust settings and input mode transitions
+      run: cargo test -p shared -p azookey-windows
+
+    - name: Test Swift dictionary and FFI ownership
+      shell: pwsh
+      run: |
+        $env:PATH = "$pwd\llama_cpu;$env:PATH"
+        Push-Location server-swift
+        swift test -c release -Xswiftc -L -Xswiftc .
+        if ($LASTEXITCODE -ne 0) { throw "Swift tests failed" }
 
     - name: Upload Setup Artifact
       uses: actions/upload-artifact@v4

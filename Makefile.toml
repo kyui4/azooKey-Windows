@@ -8,11 +8,21 @@ args = ["fmt"]
 
 [tasks.build_swift]
 description = "Build the swift code"
-script_runner = "@shell"
+script_runner = "powershell"
+script_extension = "ps1"
 script = """
-cd server-swift
-swift build -c release
-cp .build/release/azookey-server.lib ../
+$ErrorActionPreference = "Stop"
+Push-Location server-swift
+try {
+    swift package resolve
+    if ($LASTEXITCODE -ne 0) { throw "Swift dependency resolution failed" }
+    & ../scripts/prepare_converter.ps1
+    swift build -c release -Xswiftc -L -Xswiftc .
+    if ($LASTEXITCODE -ne 0) { throw "Swift build failed" }
+    Copy-Item .build/x86_64-unknown-windows-msvc/release/azookey-server.lib ../
+} finally {
+    Pop-Location
+}
 """
 
 [tasks.build_x64]

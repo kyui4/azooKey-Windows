@@ -50,6 +50,7 @@ export const Zenzai = () => {
         enable: false,
         profile: "",
         backend: "",
+        gpu_layers: 99,
     });
 
     const [capability, setCapability] = useState({
@@ -67,6 +68,7 @@ export const Zenzai = () => {
                     enable: zenzai.enable,
                     profile: zenzai.profile,
                     backend: zenzai.backend,
+                    gpu_layers: zenzai.gpu_layers ?? 99,
                 });
             })
             .catch(() => {
@@ -89,7 +91,7 @@ export const Zenzai = () => {
             await invoke("update_config", { newConfig: data });
             return data;
         } catch (error) {
-            toast("設定の更新に失敗しました");
+            toast("設定の更新に失敗しました", { description: String(error) });
             return null;
         }
     };
@@ -124,6 +126,15 @@ export const Zenzai = () => {
                 description: "変更を適用するには、PCを再起動してください",
                 duration: 10000,
             });
+        }
+    };
+
+    const handleGpuLayersChange = async (layers: string) => {
+        const gpu_layers = Number(layers);
+        const data = await updateConfig(data => { data.zenzai.gpu_layers = gpu_layers; });
+        if (data) {
+            setValue(prev => ({ ...prev, gpu_layers }));
+            toast("GPUへの割り当てを変更しました", { description: "変更を適用するには、PCを再起動してください" });
         }
     };
 
@@ -178,6 +189,19 @@ export const Zenzai = () => {
                         </SelectContent>
                     </Select>
                 </div>
+            </section>
+            <section className="flex items-center space-x-4 rounded-md border p-4">
+                <div className="flex-1 space-y-1">
+                    <h2 className="text-sm font-medium">GPUに載せる層数</h2>
+                    <p className="text-xs text-muted-foreground">通常は全層を選択します。GPUメモリが足りない場合や動作が遅い場合は減らしてください。速度はGPUにより異なります。</p>
+                </div>
+                <Select disabled={!value.enable || value.backend === "cpu"} value={String(value.gpu_layers)} onValueChange={handleGpuLayersChange}>
+                    <SelectTrigger className="w-48" aria-label="GPUに載せる層数"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="99">全層（通常設定）</SelectItem>
+                        {[0, 8, 16, 24, 32].map(layers => <SelectItem key={layers} value={String(layers)}>{layers}層</SelectItem>)}
+                    </SelectContent>
+                </Select>
             </section>
         </div>
     )

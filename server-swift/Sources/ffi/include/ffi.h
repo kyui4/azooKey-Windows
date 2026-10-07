@@ -3,6 +3,8 @@
 
 #include <stdio.h>
 
+int azookey_load_backends(void);
+
 #endif /* ffi_h */
 
 struct FFICandidate {
