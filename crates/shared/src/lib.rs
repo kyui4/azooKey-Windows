@@ -37,12 +37,14 @@ impl UserDictionaryEntry {
         let reading: String = reading.trim().chars().map(|c| {
             if ('\u{30a1}'..='\u{30f6}').contains(&c) {
                 char::from_u32(c as u32 - 0x60).unwrap()
+            } else if ('Ａ'..='Ｚ').contains(&c) || ('ａ'..='ｚ').contains(&c) {
+                char::from_u32(c as u32 - 0xfee0).unwrap()
             } else { c }
         }).collect();
         let word = word.trim().to_string();
         if reading.is_empty() || reading.chars().count() > 64
-            || !reading.chars().all(|c| ('\u{3041}'..='\u{3096}').contains(&c) || c == 'ー') {
-            return Err("読みは64文字以内のひらがな・カタカナで入力してください".into());
+            || !reading.chars().all(|c| ('\u{3041}'..='\u{3096}').contains(&c) || c == 'ー' || c.is_ascii_alphabetic()) {
+            return Err("読みは64文字以内のひらがな・カタカナ・アルファベットで入力してください".into());
         }
         if word.is_empty() || word.chars().count() > 128 || word.chars().any(char::is_control) {
             return Err("単語は改行を含まない128文字以内で入力してください".into());
@@ -123,11 +125,29 @@ mod tests {
     fn dictionary_normalizes_and_validates_input() {
         assert_eq!(UserDictionaryEntry::new(" アズーキー ", " azooKey ").unwrap(),
             UserDictionaryEntry { reading: "あずーきー".into(), word: "azooKey".into() });
-        for reading in ["", "abc", "あ い", "漢字", "ｱｽﾞｰｷｰ"] {
+        for reading in ["", "あ い", "漢字", "ｱｽﾞｰｷｰ", "AI\nあい", "AI_あい", "123", "éあい"] {
             assert!(UserDictionaryEntry::new(reading, "単語").is_err());
         }
         assert!(UserDictionaryEntry::new("あ", "a\nb").is_err());
         assert!(UserDictionaryEntry::new(&"あ".repeat(65), "単語").is_err());
         assert!(UserDictionaryEntry::new("あ", &"字".repeat(129)).is_err());
+    }
+
+    #[test]
+    fn dictionary_accepts_mixed_alphabet_and_kana() {
+        for (input, expected) in [
+            ("AIあしすたんと", "AIあしすたんと"),
+            ("あずーKey", "あずーKey"),
+            ("azooキーノAI", "azooきーのAI"),
+            (" ＡＩアシスタント ", "AIあしすたんと"),
+            ("ａｚｏｏキー", "azooきー"),
+            ("abc", "abc"),
+        ] {
+            assert_eq!(UserDictionaryEntry::new(input, "登録語").unwrap().reading, expected);
+        }
+        assert_eq!(UserDictionaryEntry::new("ＡＩアシスタント", "登録語").unwrap(),
+            UserDictionaryEntry::new("AIあしすたんと", "登録語").unwrap());
+        assert!(UserDictionaryEntry::new(&"aあ".repeat(32), "登録語").is_ok());
+        assert!(UserDictionaryEntry::new(&format!("{}A", "aあ".repeat(32)), "登録語").is_err());
     }
 }

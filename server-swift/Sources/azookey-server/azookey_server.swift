@@ -10,7 +10,7 @@ struct UserDictionaryEntry: Codable, Equatable {
     let word: String
 
     var dicdata: DicdataElement {
-        // The converter indexes dictionary entries by full-width katakana.
+        // Kana uses full-width katakana; Latin letters retain their case.
         let ruby = String(String.UnicodeScalarView(reading.unicodeScalars.map { scalar in
             if (0x3041...0x3096).contains(scalar.value) {
                 return UnicodeScalar(scalar.value + 0x60)!

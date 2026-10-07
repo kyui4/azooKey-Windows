@@ -10,6 +10,30 @@ import KanaKanjiConverterModule
     let decoded = try JSONDecoder().decode([UserDictionaryEntry].self,
         from: Data("[{\"reading\":\"あずーきー\",\"word\":\"azooKey\"}]".utf8))
     #expect(decoded == [entry])
+    #expect(UserDictionaryEntry(reading: "AIあしすたんと", word: "AIアシスタント").dicdata.ruby == "AIアシスタント")
+    #expect(UserDictionaryEntry(reading: "azooきー", word: "azooKey").dicdata.ruby == "azooキー")
+}
+
+@Test @MainActor func mixedAlphabetAndKanaWordAppearsAndCanBeRemoved() {
+    let engine = KanaKanjiConverter()
+    var options = getOptions()
+    options.dictionaryResourceURL = URL(filePath: FileManager.default.currentDirectoryPath)
+        .appendingPathComponent("azooKey_dictionary_storage/Dictionary")
+    options.requireJapanesePrediction = false
+    options.zenzaiMode = .off
+    for reading in ["AIあしすたんと", "azooきー", "あずーKey"] {
+        let entry = UserDictionaryEntry(reading: reading, word: "混在読み辞書検証")
+        var text = ComposingText()
+        text.insertAtCursorPosition(reading, inputStyle: .direct)
+        engine.sendToDicdataStore(.importDynamicUserDict([entry.dicdata]))
+        let registered = engine.requestCandidates(text, options: options)
+        #expect(registered.mainResults.contains { $0.text == entry.word })
+        engine.stopComposition()
+        engine.sendToDicdataStore(.importDynamicUserDict([]))
+        let removed = engine.requestCandidates(text, options: options)
+        #expect(!removed.mainResults.contains { $0.text == entry.word })
+        engine.stopComposition()
+    }
 }
 
 @Test func ffiResultsCanBeReleased() {
@@ -37,4 +61,3 @@ import KanaKanjiConverterModule
     let removed = engine.requestCandidates(text, options: options)
     #expect(!removed.mainResults.contains { $0.text == entry.word })
 }
-

@@ -52,7 +52,7 @@ export const Dictionary = () => {
         <h1 className="text-sm font-bold">ユーザー辞書</h1>
         <p className="text-sm text-muted-foreground">名前や専門用語を名詞として登録します。最大1000件です。</p>
         <form onSubmit={add} className="space-y-3 rounded-md border p-4">
-            <label className="block text-sm" htmlFor="dictionary-reading">読み（ひらがな・カタカナ）</label>
+            <label className="block text-sm" htmlFor="dictionary-reading">読み（ひらがな・カタカナ・アルファベット）</label>
             <Input id="dictionary-reading" value={reading} onChange={e => setReading(e.target.value)} placeholder="あずーきー" required disabled={busy || !loaded} />
             <label className="block text-sm" htmlFor="dictionary-word">単語</label>
             <Input id="dictionary-word" value={word} onChange={e => setWord(e.target.value)} placeholder="azooKey" required disabled={busy || !loaded} />
