@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import KanaKanjiConverterModule
 @testable import azookey_server
 
 @Test func dictionaryUsesKatakanaIndex() throws {
@@ -17,3 +18,23 @@ import Foundation
     free_string(owned)
     free_candidates(to_list_pointer([]), 0)
 }
+
+@Test @MainActor func registeredWordAppearsAndCanBeRemoved() {
+    let engine = KanaKanjiConverter()
+    let entry = UserDictionaryEntry(reading: "こでっくす", word: "Codex辞書検証")
+    let resources = URL(filePath: FileManager.default.currentDirectoryPath)
+    var options = getOptions()
+    options.dictionaryResourceURL = resources.appendingPathComponent("azooKey_dictionary_storage/Dictionary")
+    options.requireJapanesePrediction = false
+    options.zenzaiMode = .off
+    var text = ComposingText()
+    text.insertAtCursorPosition("kodekkusu", inputStyle: .roman2kana)
+    engine.sendToDicdataStore(.importDynamicUserDict([entry.dicdata]))
+    let registered = engine.requestCandidates(text, options: options)
+    #expect(registered.mainResults.contains { $0.text == entry.word })
+    engine.stopComposition()
+    engine.sendToDicdataStore(.importDynamicUserDict([]))
+    let removed = engine.requestCandidates(text, options: options)
+    #expect(!removed.mainResults.contains { $0.text == entry.word })
+}
+

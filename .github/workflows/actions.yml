@@ -53,7 +53,7 @@ jobs:
       uses: arduino/setup-protoc@v3
 
     - name: Install cargo-make
-      run: cargo install --force cargo-make
+      run: cargo install --force cargo-make --debug
 
     - name: Install x86 target
       run: rustup target add i686-pc-windows-msvc
@@ -116,3 +116,4 @@ jobs:
         name: azookey-setup
         path: build/azookey-setup.exe
         if-no-files-found: error
+

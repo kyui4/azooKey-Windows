@@ -476,8 +476,8 @@ impl TextServiceFactory {
                     self.update_pos()?;
                     self.end_composition()?;
 
-                    let mut ime_state = IMEState::get()?;
-                    ime_state.input_mode = mode.clone();
+                    // Release the state lock before TSF asks GetIcon for the new mode.
+                    IMEState::get()?.input_mode = mode.clone();
 
                     // update the language bar
                     self.update_lang_bar()?;
@@ -587,3 +587,4 @@ impl TextServiceFactory {
         Ok(())
     }
 }
+

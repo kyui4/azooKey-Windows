@@ -29,5 +29,9 @@ $patch = @'
         #endif
 '@
 $source = $source.Replace($anchor, $patch.Replace("`r`n", "`n"))
+# SwiftPM makes checkout files read-only on Windows. Only this pinned source is patched.
+$file = Get-Item -LiteralPath $path
+$file.IsReadOnly = $false
 [IO.File]::WriteAllText($path, $source, [Text.UTF8Encoding]::new($false))
 Write-Output 'Applied GPU offload patch to the pinned converter'
+
